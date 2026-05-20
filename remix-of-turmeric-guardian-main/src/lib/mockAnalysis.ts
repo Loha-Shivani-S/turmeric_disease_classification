@@ -43,15 +43,15 @@ export function getLocationInsight(lat: number, lon: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Grok AI (xAI) — Dynamic remedy & location insights
+// Groq AI — Dynamic remedy & location insights (ultra-fast LPU inference)
 // ─────────────────────────────────────────────────────────────
 async function getGrokInsights(
   disease: string,
   lat?: number,
   lon?: number
 ): Promise<{ remedy: string; locationInsight: string } | null> {
-  const apiKey = import.meta.env.VITE_GROK_API_KEY;
-  if (!apiKey || apiKey === "your_grok_api_key_here") return null;
+  const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+  if (!apiKey || apiKey === "your_groq_api_key_here") return null;
 
   const locationCtx = lat !== undefined && lon !== undefined
     ? `The farmer's exact GPS location is ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E.`
@@ -69,14 +69,14 @@ Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text)
 }`;
 
   try {
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-3-mini",
+        model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         max_tokens: 512,
