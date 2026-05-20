@@ -36,8 +36,6 @@ const locationDetails: Record<string, { soil: string; climate: string; bestPract
   },
 };
 
-// Removed randomized diseases
-
 export function getLocationInsight(lat: number, lon: number): string {
   const zone = lat > 20 ? "tropical" : lat > 10 ? "subtropical" : "temperate";
   const details = locationDetails[zone];
@@ -45,15 +43,15 @@ export function getLocationInsight(lat: number, lon: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Gemini AI — Dynamic remedy & location insights
+// Grok AI (xAI) — Dynamic remedy & location insights
 // ─────────────────────────────────────────────────────────────
-async function getGeminiInsights(
+async function getGrokInsights(
   disease: string,
   lat?: number,
   lon?: number
 ): Promise<{ remedy: string; locationInsight: string } | null> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey || apiKey === "your_gemini_api_key_here") return null;
+  const apiKey = import.meta.env.VITE_GROK_API_KEY;
+  if (!apiKey || apiKey === "your_grok_api_key_here") return null;
 
   const locationCtx = lat !== undefined && lon !== undefined
     ? `The farmer's exact GPS location is ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E.`
@@ -67,32 +65,32 @@ ${locationCtx}
 Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text) in exactly this format:
 {
   "remedy": "A specific, practical, 3-4 sentence remedy using organic/natural methods that a small farmer can easily follow. Use simple language and include relevant emojis.",
-  "locationInsight": "📍 Location: [Identify the region/state/country from the GPS coordinates, e.g. Tamil Nadu, India]\\n🌡️ Climate: [Describe the climate zone - tropical/subtropical/temperate - and current seasonal conditions relevant to turmeric]\\n🌱 Soil: [Describe the typical soil type in that region and how it affects turmeric growth]\\n💧 Water: [Describe typical rainfall/irrigation needs for that location]\\n👨‍🌾 Local Tip: [One highly specific growing tip for turmeric in that exact region, mentioning local conditions or practices]"
+  "locationInsight": "📍 Location: [Identify the region/state/country from the GPS coordinates]\\n🌡️ Climate: [Describe the climate zone and seasonal conditions relevant to turmeric]\\n🌱 Soil: [Describe the typical soil type in that region and how it affects turmeric growth]\\n💧 Water: [Describe typical rainfall/irrigation needs for that location]\\n👨‍🌾 Local Tip: [One highly specific growing tip for turmeric in that exact region]"
 }`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
-        }),
-      }
-    );
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-3-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 512,
+      }),
+    });
 
-    if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+    if (!response.ok) throw new Error(`Grok API error: ${response.status}`);
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-    // Strip any accidental markdown fences
+    const text = data.choices?.[0]?.message?.content ?? "";
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   } catch (err) {
-    console.error("Gemini API failed, using fallback:", err);
+    console.error("Grok API failed, using fallback:", err);
     return null;
   }
 }
@@ -131,13 +129,13 @@ export async function runMockAnalysis(
     console.error("Backend AI server failed, falling back to mock response:", error);
   }
 
-  // Stage 3 & 4: Get AI-powered insights from Gemini
+  // Stage 3 & 4: Get AI-powered insights from Grok
   await new Promise((r) => setTimeout(r, 400)); // Stage 3
-  const gemini = await getGeminiInsights(disease, lat, lon);
+  const grok = await getGrokInsights(disease, lat, lon);
   await new Promise((r) => setTimeout(r, 400)); // Stage 4
 
-  const remedy = gemini?.remedy ?? remedies[disease] ?? "Continue regular care and monitoring.";
-  const locationInsight = gemini?.locationInsight ?? (
+  const remedy = grok?.remedy ?? remedies[disease] ?? "Continue regular care and monitoring.";
+  const locationInsight = grok?.locationInsight ?? (
     lat !== undefined && lon !== undefined
       ? getLocationInsight(lat, lon)
       : "Location not available. Enable GPS for environmental insights."
