@@ -1,7 +1,16 @@
-tensorflow>=2.12.0
-numpy>=1.21.0
-opencv-python>=4.5.0
+# Core ML — Keras with PyTorch CPU backend (no TensorFlow needed)
+keras>=3.0.0
+torch --index-url https://download.pytorch.org/whl/cpu
+torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Image processing
+numpy>=1.21.0,<2.0.0
+opencv-python-headless>=4.5.0
 matplotlib>=3.5.0
+
+# API server
 flask>=3.0.0
 flask-cors>=4.0.0
+
+# Model hosting
 huggingface-hub>=0.22.0
