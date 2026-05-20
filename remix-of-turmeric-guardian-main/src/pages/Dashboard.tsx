@@ -110,8 +110,31 @@ const Dashboard = () => {
       setImage(URL.createObjectURL(blob));
       stopCamera();
       setResult(null);
-    }, "image/jpeg");
+    }, "image/jpeg", 0.9);
   }, [stopCamera]);
+
+  // Resize large images (e.g. phone camera) before sending to backend
+  const resizeImageFile = (file: File, maxDim = 800): Promise<File> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const { naturalWidth: w, naturalHeight: h } = img;
+        if (w <= maxDim && h <= maxDim) { resolve(file); return; }
+        const scale = maxDim / Math.max(w, h);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file);
+        }, "image/jpeg", 0.88);
+      };
+      img.onerror = () => resolve(file);
+      img.src = url;
+    });
+  };
 
   const analyze = async () => {
     if (!imageFile) return;
@@ -123,7 +146,9 @@ const Dashboard = () => {
       await new Promise((r) => setTimeout(r, 800));
     }
 
-    const res = await runMockAnalysis(imageFile, location?.lat, location?.lon);
+    // Resize to max 800px before sending — avoids timeout on large phone camera photos
+    const fileToSend = await resizeImageFile(imageFile, 800);
+    const res = await runMockAnalysis(fileToSend, location?.lat, location?.lon);
     setResult(res);
     setAnalyzing(false);
     setCurrentStage(-1);
