@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: turmericare-backend
+    runtime: python
+    rootDir: turmeric_project/turmeric_project
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: KERAS_BACKEND
+        value: torch
+    autoDeploy: true
