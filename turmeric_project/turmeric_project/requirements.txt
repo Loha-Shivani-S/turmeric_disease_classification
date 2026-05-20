@@ -1,7 +1,8 @@
-# Core ML — Keras with PyTorch CPU backend (no TensorFlow needed)
+# Core ML — Keras with PyTorch backend
 keras>=3.0.0
-torch --index-url https://download.pytorch.org/whl/cpu
-torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# NOTE: PyTorch CPU is installed separately in render.yaml buildCommand
+# to force CPU-only wheels (avoids CUDA packages which are too large for free tier)
 
 # Image processing
 numpy>=1.21.0,<2.0.0
