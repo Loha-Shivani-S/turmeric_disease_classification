@@ -11,6 +11,7 @@ matplotlib>=3.5.0
 # API server
 flask>=3.0.0
 flask-cors>=4.0.0
+gunicorn>=21.0.0
 
 # Model hosting
 huggingface-hub>=0.22.0
