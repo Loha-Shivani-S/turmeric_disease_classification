@@ -40,6 +40,7 @@ const Dashboard = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -67,24 +68,31 @@ const Dashboard = () => {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: "environment" } } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setCameraActive(true);
-      }
+      streamRef.current = stream;
+      setCameraActive(true); // render the <video> first, then attach in useEffect
     } catch (err) {
       console.error("Camera error:", err);
-      toast({ title: "Camera error", description: "Could not access camera. Please check your browser permissions.", variant: "destructive" });
+      toast({ title: "Camera error", description: "Could not access camera. Please check permissions.", variant: "destructive" });
     }
   };
 
-  const stopCamera = useCallback(() => {
-    if (videoRef.current) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream?.getTracks().forEach((t) => t.stop());
+  // Attach stream to <video> after it mounts in the DOM
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(console.error);
     }
+  }, [cameraActive]);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
   }, []);
 
