@@ -16,6 +16,8 @@ Usage:
 """
 
 import os, sys, argparse
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 os.environ["KERAS_BACKEND"] = "torch"
 import numpy as np
 import cv2
@@ -61,8 +63,15 @@ _clf_model  = None
 
 def load_models():
     global _unet_model, _clf_model
+    if _clf_model is not None:
+        return _unet_model, _clf_model
+
     import keras
+    from models.unet import combined_loss, mean_iou_metric
+
     clf_path = os.path.join(CFG.MODEL_DIR, 'mobilenet_final.keras')
+    unet_path = os.path.join(CFG.MODEL_DIR, 'unet_final.keras')
+
     if not os.path.exists(clf_path):
         print(f"\n  [WARNING] No classifier model found in '{CFG.MODEL_DIR}/'.")
         print("  Please run 'python train.py' first to train and save the classifier.")
@@ -76,47 +85,24 @@ def load_models():
             f"Classifier was trained for {_clf_model.output_shape[-1]} classes, "
             f"but config.py now has {CFG.NUM_CLASSES}. Run train.py again."
         )
-    _unet_model = None
-    print("  Segmentation uses heuristic masks")
-    print(f"  MobileNet loaded from: {clf_path}")
-    return _unet_model, _clf_model
 
-    from models.unet      import get_unet, combined_loss, mean_iou_metric
-    from models.mobilenet import get_mobilenet
-
-    unet_path = os.path.join(CFG.MODEL_DIR, 'unet_final.keras')
-    clf_path  = os.path.join(CFG.MODEL_DIR, 'mobilenet_final.keras')
-
-    # Try loading saved models first
-    if os.path.exists(unet_path) and os.path.exists(clf_path):
-        print("  Loading saved models...")
+    if os.path.exists(unet_path):
+        print("  Loading saved UNet segmentation model...")
         custom_objects = {
             'combined_loss': combined_loss,
-            'mean_iou':      mean_iou_metric()
+            'mean_iou': mean_iou_metric()
         }
-        _unet_model = keras.saving.load_model(
-            unet_path, custom_objects=custom_objects)
-        _clf_model  = keras.saving.load_model(clf_path)
-        if _clf_model.output_shape[-1] != CFG.NUM_CLASSES:
-            raise ValueError(
-                f"Classifier was trained for {_clf_model.output_shape[-1]} classes, "
-                f"but config.py now has {CFG.NUM_CLASSES}. Run train.py again."
-            )
-        if _unet_model.output_shape[-1] != CFG.NUM_CLASSES:
-            raise ValueError(
-                f"UNet was trained for {_unet_model.output_shape[-1]} classes, "
-                f"but config.py now has {CFG.NUM_CLASSES}. Run train.py again."
-            )
-        print(f"  ✓ UNet loaded from:      {unet_path}")
-        print(f"  ✓ MobileNet loaded from: {clf_path}")
+        try:
+            _unet_model = keras.saving.load_model(unet_path, custom_objects=custom_objects)
+            print(f"  ✓ UNet loaded from:      {unet_path}")
+        except Exception as e:
+            print(f"  [Note] Could not load saved UNet ({e}). Using heuristic segmentation.")
+            _unet_model = None
     else:
-        print(f"\n  [WARNING] No saved models found in '{CFG.MODEL_DIR}/'.")
-        print(f"  Please run 'python train.py' first to train and save models.")
-        print(f"  Expected files:")
-        print(f"    {unet_path}")
-        print(f"    {clf_path}\n")
-        sys.exit(1)
+        _unet_model = None
+        print("  Segmentation uses heuristic masks (no UNet model weights file).")
 
+    print(f"  ✓ MobileNet loaded from: {clf_path}")
     return _unet_model, _clf_model
 
 
@@ -237,12 +223,16 @@ def predict_image(img_path, save_report=True, report_dir=None):
     pred_class = int(np.argmax(clf_probs))
     confidence = float(clf_probs[pred_class])
 
-    # Heuristic segmentation based on the predicted class.
-    seg_mask = generate_seg_masks_from_labels(
-        img_segmented[np.newaxis],
-        np.array([pred_class], dtype=np.int32)
-    )[0]
-    seg_probs = np.eye(CFG.NUM_CLASSES, dtype=np.float32)[seg_mask][np.newaxis]
+    # Segmentation mask (UNet model if available, else heuristic)
+    if unet_model is not None:
+        seg_probs = unet_model.predict(img_norm[np.newaxis], verbose=0)
+        seg_mask = np.argmax(seg_probs[0], axis=-1)
+    else:
+        seg_mask = generate_seg_masks_from_labels(
+            img_segmented[np.newaxis],
+            np.array([pred_class], dtype=np.int32)
+        )[0]
+        seg_probs = np.eye(CFG.NUM_CLASSES, dtype=np.float32)[seg_mask][np.newaxis]
 
     # Severity
     sev_idx, sev_label, coverage = compute_severity(seg_mask, pred_class)

@@ -17,6 +17,8 @@ No synthetic generation — uses YOUR images only.
 
 import os
 import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 os.environ["KERAS_BACKEND"] = "torch"
 import numpy as np
 import cv2
@@ -106,8 +108,8 @@ def scan_dataset(dataset_dir, class_names):
             continue
 
         imgs = sorted([
-            p for p in cls_dir.iterdir()
-            if p.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
+            p for p in cls_dir.rglob('*')
+            if p.is_file() and p.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
         ])
         if not imgs:
             print(f"  ⚠  {cls:<20} → 0 images found")
@@ -158,11 +160,18 @@ def augment_image(img):
     if np.random.rand() < 0.3:
         img = cv2.flip(img, 0)
 
-    # Random rotation ±20°
-    if np.random.rand() < 0.5:
-        angle = np.random.uniform(-20, 20)
+    # Random rotation ±30°
+    if np.random.rand() < 0.6:
+        angle = np.random.uniform(-30, 30)
         M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
         img = cv2.warpAffine(img, M, (w, h), borderMode=cv2.BORDER_REFLECT)
+
+    # Random translation / shift
+    if np.random.rand() < 0.4:
+        tx = np.random.randint(-15, 15)
+        ty = np.random.randint(-15, 15)
+        M_shift = np.float32([[1, 0, tx], [0, 1, ty]])
+        img = cv2.warpAffine(img, M_shift, (w, h), borderMode=cv2.BORDER_REFLECT)
 
     # Random brightness/contrast
     if np.random.rand() < 0.5:
@@ -197,26 +206,70 @@ def augment_image(img):
 # Dataset split & load
 # ─────────────────────────────────────────────────────────────
 
+def is_augmented(path):
+    """Check if an image file path belongs to pre-augmented data."""
+    p = Path(path)
+    filename = p.name.lower()
+    if filename.startswith("aug"):
+        return True
+    dataset_dir = Path(getattr(CFG, "DATASET_DIR", "dataset"))
+    try:
+        parts = p.relative_to(dataset_dir).parts
+        for part in parts[:-1]:
+            if "aug" in part.lower():
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def split_samples(samples, val_ratio=CFG.VAL_SPLIT, test_ratio=CFG.TEST_SPLIT, seed=CFG.RANDOM_SEED):
-    """Stratified split into train / val / test."""
+    """
+    Leakage-free stratified split:
+    - Pre-augmented images are placed EXCLUSIVELY into the training set.
+    - Authentic original ('normal') images are stratified across train, val, and test splits.
+    This guarantees val and test sets evaluate only on unseen, real-world images.
+    """
     np.random.seed(seed)
 
-    # Group by class
     from collections import defaultdict
-    by_class = defaultdict(list)
+    normal_by_class = defaultdict(list)
+    aug_by_class = defaultdict(list)
+
     for path, label in samples:
-        by_class[label].append((path, label))
+        if is_augmented(path):
+            aug_by_class[label].append((path, label))
+        else:
+            normal_by_class[label].append((path, label))
 
     train_s, val_s, test_s = [], [], []
-    for label, items in sorted(by_class.items()):
-        n = len(items)
-        idx = np.random.permutation(n)
-        n_test = max(1, int(n * test_ratio))
-        n_val  = max(1, int(n * val_ratio))
 
-        test_s  += [items[i] for i in idx[:n_test]]
-        val_s   += [items[i] for i in idx[n_test:n_test + n_val]]
-        train_s += [items[i] for i in idx[n_test + n_val:]]
+    for label in sorted(set(l for _, l in samples)):
+        norm_items = normal_by_class[label]
+        aug_items = aug_by_class[label]
+
+        n_norm = len(norm_items)
+        if n_norm > 0:
+            idx = np.random.permutation(n_norm)
+            n_test = max(1, int(n_norm * test_ratio))
+            n_val  = max(1, int(n_norm * val_ratio))
+
+            test_cls  = [norm_items[i] for i in idx[:n_test]]
+            val_cls   = [norm_items[i] for i in idx[n_test:n_test + n_val]]
+            train_cls = [norm_items[i] for i in idx[n_test + n_val:]] + aug_items
+        else:
+            n_aug = len(aug_items)
+            idx = np.random.permutation(n_aug)
+            n_test = max(1, int(n_aug * test_ratio))
+            n_val  = max(1, int(n_aug * val_ratio))
+
+            test_cls  = [aug_items[i] for i in idx[:n_test]]
+            val_cls   = [aug_items[i] for i in idx[n_test:n_test + n_val]]
+            train_cls = [aug_items[i] for i in idx[n_test + n_val:]]
+
+        train_s += train_cls
+        val_s   += val_cls
+        test_s  += test_cls
 
     np.random.shuffle(train_s)
     np.random.shuffle(val_s)

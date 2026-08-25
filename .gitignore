@@ -13,16 +13,18 @@ build/
 
 # Dataset images (too large for git — store separately on Drive/Kaggle)
 turmeric_project/turmeric_project/dataset/
-.venv/
-venv/
-env/
-dist/
-build/
+turmeric_project_main/turmeric_project/dataset/
 
-# Python model weights (too large for git)
+# Python model weights & results (too large for git)
 turmeric_project/turmeric_project/saved_models/
 turmeric_project/turmeric_project/results/
-turmeric_project/turmeric_project/temp_uploads/
+turmeric_project/turmeric_project/temp_uploads/*
+!turmeric_project/turmeric_project/temp_uploads/.gitkeep
+
+turmeric_project_main/turmeric_project/saved_models/
+turmeric_project_main/turmeric_project/results/
+turmeric_project_main/turmeric_project/temp_uploads/*
+!turmeric_project_main/turmeric_project/temp_uploads/.gitkeep
 
 # Node / Frontend
 node_modules/

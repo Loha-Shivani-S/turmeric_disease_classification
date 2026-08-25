@@ -23,7 +23,8 @@ from utils.dataloader import (
 from utils.metrics import (
     confusion_matrix, classification_metrics,
     plot_confusion_matrix,
-    plot_training_history
+    plot_training_history,
+    export_metrics_to_excel
 )
 
 import keras
@@ -132,13 +133,37 @@ def main():
     # ── 2. Build models ───────────────────────────────────────
     print("\n[2/5] Building models...")
     from models.mobilenet import get_mobilenet, prepare_for_fine_tuning
+    from models.unet import get_unet
 
-    clf_model  = get_mobilenet()
-
+    clf_model = get_mobilenet()
     print(f"  MobileNet   params: {clf_model.count_params():>12,}")
 
+    unet_model = None
+    if CFG.TRAIN_UNET:
+        unet_model = get_unet()
+        print(f"  UNet        params: {unet_model.count_params():>12,}")
+
     # ── 3. Segmentation setup ─────────────────────────────────
-    print("\n[3/5] Using heuristic segmentation masks (no UNet training).")
+    if CFG.TRAIN_UNET:
+        print(f"\n[3/5] Training UNet segmentation model ({CFG.UNET_EPOCHS} epochs max)...")
+        unet_hist = unet_model.fit(
+            X_train, y_seg_train,
+            validation_data=(X_val, y_seg_val),
+            epochs=CFG.UNET_EPOCHS,
+            batch_size=CFG.BATCH_SIZE,
+            callbacks=get_callbacks('unet', monitor='val_loss', mode='min'),
+            verbose=1
+        )
+        unet_path = os.path.join(CFG.MODEL_DIR, 'unet_final.keras')
+        unet_model.save(unet_path)
+        print(f"  UNet saved → {unet_path}")
+
+        plot_training_history(
+            unet_hist.history, title='UNet',
+            save_path=os.path.join(CFG.RESULTS_DIR, 'unet_history.png')
+        )
+    else:
+        print("\n[3/5] Using heuristic segmentation masks (no UNet training).")
 
     # ── 4. Train MobileNet ────────────────────────────────────
     print(f"\n[4/5] Training MobileNet classifier ({CFG.CLF_EPOCHS} epochs max)...")
@@ -189,9 +214,36 @@ def main():
     print("  Note: segmentation metrics are skipped because segmentation is")
     print("  heuristic-only in the current pipeline, not a learned model.")
 
-    # ── 7. Save plots ─────────────────────────────────────────
-    print("  Generating plots...")
+    # ── 7. Save plots, JSON and Excel reports ──────────────────
+    print("  Generating plots, metrics.json, and metrics_report.xlsx...")
     os.makedirs(CFG.RESULTS_DIR, exist_ok=True)
+    export_metrics_to_excel(clf, cm, os.path.join(CFG.RESULTS_DIR, 'metrics_report.xlsx'))
+    import json
+    metrics_json_path = os.path.join(CFG.RESULTS_DIR, 'metrics.json')
+    metrics_dict = {
+        'accuracy': float(clf['accuracy']),
+        'macro_precision': float(clf['macro_precision']),
+        'macro_recall': float(clf['macro_recall']),
+        'macro_f1': float(clf['macro_f1']),
+        'weighted_precision': float(clf['weighted_precision']),
+        'weighted_recall': float(clf['weighted_recall']),
+        'weighted_f1': float(clf['weighted_f1']),
+        'mcc': float(clf['mcc']),
+        'kappa': float(clf['kappa']),
+        'per_class': {
+            CFG.CLASS_NAMES[i]: {
+                'precision': float(clf['precision'][i]),
+                'recall': float(clf['recall'][i]),
+                'f1': float(clf['f1'][i]),
+                'specificity': float(clf['specificity'][i]),
+                'support': int(clf['support'][i]),
+            } for i in range(len(CFG.CLASS_NAMES))
+        }
+    }
+    with open(metrics_json_path, 'w', encoding='utf-8') as f:
+        json.dump(metrics_dict, f, indent=2)
+    print(f"  Saved raw metrics → {metrics_json_path}")
+
     plot_confusion_matrix(
         cm, save_path=os.path.join(CFG.RESULTS_DIR, 'confusion_matrix.png'))
     plot_training_history(

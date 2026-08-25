@@ -178,6 +178,61 @@ def print_report(clf, seg, class_names=CFG.CLASS_NAMES):
     print(f"{'═'*50}\n")
 
 
+def export_metrics_to_excel(clf, cm, save_path, class_names=CFG.CLASS_NAMES):
+    """Export all classification metrics and confusion matrix into an Excel (.xlsx) file."""
+    import pandas as pd
+
+    # Sheet 1: Overall Summary Scorecard
+    summary_data = {
+        "Metric": [
+            "Overall Accuracy",
+            "Macro Precision",
+            "Macro Recall",
+            "Macro F1-Score",
+            "Weighted Precision",
+            "Weighted Recall",
+            "Weighted F1-Score",
+            "Matthews Correlation (MCC)",
+            "Cohen's Kappa",
+        ],
+        "Value": [
+            clf['accuracy'],
+            clf['macro_precision'],
+            clf['macro_recall'],
+            clf['macro_f1'],
+            clf['weighted_precision'],
+            clf['weighted_recall'],
+            clf['weighted_f1'],
+            clf['mcc'],
+            clf['kappa'],
+        ]
+    }
+    df_summary = pd.DataFrame(summary_data)
+
+    # Sheet 2: Per-Class Classification Metrics
+    per_class_data = {
+        "Class Name": class_names,
+        "Precision": clf['precision'],
+        "Recall": clf['recall'],
+        "F1-Score": clf['f1'],
+        "Specificity": clf['specificity'],
+        "Support (Sample Count)": clf['support'],
+    }
+    df_per_class = pd.DataFrame(per_class_data)
+
+    # Sheet 3: Confusion Matrix
+    df_cm = pd.DataFrame(cm, index=[f"True: {c}" for c in class_names], columns=[f"Pred: {c}" for c in class_names])
+
+    # Write to Excel workbook with multiple sheets
+    with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+        df_summary.to_excel(writer, sheet_name='Summary Metrics', index=False)
+        df_per_class.to_excel(writer, sheet_name='Per-Class Metrics', index=False)
+        df_cm.to_excel(writer, sheet_name='Confusion Matrix')
+
+    print(f"  Saved Excel metrics report → {save_path}")
+
+
+
 # ─────────────────────────────────────────────────────────────
 # Plots
 # ─────────────────────────────────────────────────────────────

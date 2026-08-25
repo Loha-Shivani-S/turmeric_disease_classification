@@ -93,11 +93,11 @@ def build_unet(input_shape=(CFG.IMG_SIZE, CFG.IMG_SIZE, CFG.IMG_CHANNELS),
 # ─────────────────────────────────────────────────────────────
 
 def dice_loss(y_true, y_pred, smooth=1e-6):
-    """Dice loss for segmentation. Works with sparse integer labels."""
+    """Dice loss for segmentation. Works with 1D/2D reshaped tensors."""
     num_classes = CFG.NUM_CLASSES
     y_true_oh = ops.one_hot(ops.cast(y_true, "int32"), num_classes)
-    y_true_oh = ops.cast(ops.reshape(y_true_oh, (-1, num_classes)), "float32")
-    y_pred_f  = ops.cast(ops.reshape(y_pred,    (-1, num_classes)), "float32")
+    y_true_oh = ops.cast(y_true_oh, "float32")
+    y_pred_f  = ops.cast(y_pred, "float32")
 
     intersection = ops.sum(y_true_oh * y_pred_f, axis=0)
     dice = (2.0 * intersection + smooth) / (
@@ -107,9 +107,13 @@ def dice_loss(y_true, y_pred, smooth=1e-6):
 
 
 def combined_loss(y_true, y_pred):
-    """50% Dice + 50% Sparse Categorical Cross-Entropy."""
-    cce  = keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
-    dl   = dice_loss(y_true, y_pred)
+    """50% Dice + 50% Sparse Categorical Cross-Entropy with contiguous tensor layout."""
+    num_classes = CFG.NUM_CLASSES
+    y_true_flat = ops.reshape(y_true, (-1,))
+    y_pred_flat = ops.reshape(y_pred, (-1, num_classes))
+
+    cce = keras.losses.sparse_categorical_crossentropy(y_true_flat, y_pred_flat)
+    dl  = dice_loss(y_true_flat, y_pred_flat)
     return 0.5 * ops.mean(cce) + 0.5 * dl
 
 
@@ -119,7 +123,7 @@ def mean_iou_metric(num_classes=CFG.NUM_CLASSES):
     def _metric(y_true, y_pred):
         y_pred_cls = ops.argmax(y_pred, axis=-1)
         miou.reset_state()
-        miou.update_state(y_true, y_pred_cls)
+        miou.update_state(ops.reshape(y_true, (-1,)), ops.reshape(y_pred_cls, (-1,)))
         return miou.result()
     _metric.__name__ = 'mean_iou'
     return _metric
