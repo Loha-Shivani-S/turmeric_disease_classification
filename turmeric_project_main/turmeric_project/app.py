@@ -1,7 +1,14 @@
 import os
+import sys
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+import config as CFG
 
 app = Flask(__name__)
 
@@ -24,7 +31,7 @@ def handle_options():
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
         return response
 
-UPLOAD_FOLDER = 'temp_uploads'
+UPLOAD_FOLDER = os.path.join(ROOT, 'temp_uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -36,19 +43,19 @@ MODEL_FILENAME = "mobilenet_final.keras"
 
 def download_model_if_needed():
     """Download model from Hugging Face Hub if not already present locally."""
-    clf_path = os.path.join("saved_models", MODEL_FILENAME)
+    os.makedirs(CFG.MODEL_DIR, exist_ok=True)
+    clf_path = os.path.join(CFG.MODEL_DIR, MODEL_FILENAME)
     if os.path.exists(clf_path):
         print(f"  ✓ Model already exists at: {clf_path}")
         return
 
-    print(f"  Downloading model from Hugging Face: {HF_REPO_ID}/{MODEL_FILENAME}")
-    os.makedirs("saved_models", exist_ok=True)
+    print(f"  Downloading model from Hugging Face: {HF_REPO_ID}/{MODEL_FILENAME} to {CFG.MODEL_DIR}")
     try:
         from huggingface_hub import hf_hub_download
         downloaded_path = hf_hub_download(
             repo_id=HF_REPO_ID,
             filename=MODEL_FILENAME,
-            local_dir="saved_models",
+            local_dir=CFG.MODEL_DIR,
             local_dir_use_symlinks=False
         )
         print(f"  ✓ Model downloaded to: {downloaded_path}")
@@ -56,7 +63,7 @@ def download_model_if_needed():
         print(f"  ✗ Model download failed: {e}")
         raise RuntimeError(
             f"Could not download model from Hugging Face ({HF_REPO_ID}). "
-            "Please ensure the repo is public and the file exists."
+            f"Error details: {e}"
         ) from e
 
 # Download model at server startup
@@ -64,11 +71,12 @@ download_model_if_needed()
 
 # Now import predict (which loads the model)
 from predict import predict_image
-import config as CFG
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'model': MODEL_FILENAME})
+    clf_path = os.path.join(CFG.MODEL_DIR, MODEL_FILENAME)
+    exists = os.path.exists(clf_path)
+    return jsonify({'status': 'ok', 'model': MODEL_FILENAME, 'model_exists': exists})
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -101,7 +109,8 @@ def predict():
             result['predicted_label'], result['predicted_label']
         )
 
-        os.remove(filepath)
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
         return jsonify({
             "disease":    frontend_disease,
@@ -112,6 +121,8 @@ def predict():
         })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         if os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({'error': str(e)}), 500

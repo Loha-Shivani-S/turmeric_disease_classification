@@ -73,10 +73,9 @@ def load_models():
     unet_path = os.path.join(CFG.MODEL_DIR, 'unet_final.keras')
 
     if not os.path.exists(clf_path):
-        print(f"\n  [WARNING] No classifier model found in '{CFG.MODEL_DIR}/'.")
-        print("  Please run 'python train.py' first to train and save the classifier.")
-        print(f"  Expected file: {clf_path}\n")
-        sys.exit(1)
+        raise FileNotFoundError(
+            f"No classifier model found in '{CFG.MODEL_DIR}/'. Expected file: {clf_path}"
+        )
 
     print("  Loading saved classifier...")
     _clf_model = keras.saving.load_model(clf_path)
