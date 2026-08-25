@@ -19,6 +19,7 @@ import os, sys, argparse
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 os.environ["KERAS_BACKEND"] = "torch"
+import keras
 import numpy as np
 import cv2
 import matplotlib
@@ -61,6 +62,14 @@ _unet_model = None
 _clf_model  = None
 
 
+class PatchedBatchNormalization(keras.layers.BatchNormalization):
+    def __init__(self, **kwargs):
+        kwargs.pop('renorm', None)
+        kwargs.pop('renorm_clipping', None)
+        kwargs.pop('renorm_momentum', None)
+        super().__init__(**kwargs)
+
+
 def load_models():
     global _unet_model, _clf_model
     if _clf_model is not None:
@@ -78,7 +87,10 @@ def load_models():
         )
 
     print("  Loading saved classifier...")
-    _clf_model = keras.saving.load_model(clf_path)
+    custom_clf_objects = {
+        'BatchNormalization': PatchedBatchNormalization
+    }
+    _clf_model = keras.saving.load_model(clf_path, custom_objects=custom_clf_objects)
     if _clf_model.output_shape[-1] != CFG.NUM_CLASSES:
         raise ValueError(
             f"Classifier was trained for {_clf_model.output_shape[-1]} classes, "
@@ -89,7 +101,8 @@ def load_models():
         print("  Loading saved UNet segmentation model...")
         custom_objects = {
             'combined_loss': combined_loss,
-            'mean_iou': mean_iou_metric()
+            'mean_iou': mean_iou_metric(),
+            'BatchNormalization': PatchedBatchNormalization
         }
         try:
             _unet_model = keras.saving.load_model(unet_path, custom_objects=custom_objects)
