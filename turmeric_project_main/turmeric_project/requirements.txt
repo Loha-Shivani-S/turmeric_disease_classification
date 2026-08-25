@@ -1,11 +1,10 @@
 # Core ML — Keras with PyTorch backend
 keras>=3.0.0
-tensorflow>=2.12.0
 
 # NOTE: PyTorch CPU is installed separately in render.yaml buildCommand
 # to force CPU-only wheels (avoids CUDA packages which are too large for free tier)
 
-# Image processing & Data processing
+# Image processing
 numpy>=1.21.0,<2.0.0
 opencv-python-headless>=4.5.0
 matplotlib>=3.5.0
