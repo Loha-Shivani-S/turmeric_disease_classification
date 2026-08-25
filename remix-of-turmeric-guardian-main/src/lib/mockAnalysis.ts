@@ -111,7 +111,7 @@ export async function runMockAnalysis(
   let confidence = 0.95;
 
   try {
-    const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:5000';
+    const API_URL = import.meta.env.VITE_API_URL || 'https://turmericare-backend.onrender.com';
     const response = await fetch(`${API_URL}/predict`, {
       method: 'POST',
       body: formData,
