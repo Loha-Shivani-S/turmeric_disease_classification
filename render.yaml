@@ -4,7 +4,7 @@ services:
     runtime: python
     rootDir: turmeric_project_main/turmeric_project
     buildCommand: >
-      pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu &&
+      pip install --no-cache-dir torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu &&
       pip install --no-cache-dir -r requirements.txt
     startCommand: gunicorn --workers=1 --threads=1 --timeout=300 --bind=0.0.0.0:$PORT app:app
     envVars:
