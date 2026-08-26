@@ -108,39 +108,46 @@ export async function runMockAnalysis(
   lat?: number,
   lon?: number
 ): Promise<AnalysisResult> {
-  let disease = "Healthy Leaf";
-  let confidence = 0.95;
+  let disease = "";
+  let confidence = 0;
 
-  const hfToken = import.meta.env.VITE_HF_TOKEN || "";
+  const hfToken = (import.meta.env.VITE_HF_TOKEN || "").trim();
 
   try {
     const clientOptions: Record<string, any> = {};
-    if (hfToken && hfToken.trim().length > 0) {
-      clientOptions.token = hfToken.trim();
-      clientOptions.hf_token = hfToken.trim();
+    if (hfToken) {
+      clientOptions.token = hfToken;
+      clientOptions.hf_token = hfToken;
     }
 
     console.log("Connecting to Hugging Face Space 'loni-lolita/turmericare-backend'...");
     const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
 
-    console.log("Sending image for prediction...");
+    console.log("Sending image for AI classification...");
     const result = await client.predict("/predict", {
       image: imageFile,
     });
 
-    console.log("Raw prediction result from HF Space:", result);
+    console.log("Raw prediction response:", result);
 
     if (result && result.data && result.data[0]) {
       const rawStr = result.data[0];
-      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      const parsed = typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr;
       if (parsed && parsed.disease) {
         disease = parsed.disease;
-        confidence = parsed.confidence ?? confidence;
+        confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.95;
         console.log("✓ Official @gradio/client Prediction Successful:", disease, confidence);
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Official @gradio/client error:", error);
+    throw new Error(
+      error?.message || "Failed to analyze image with Hugging Face ML Space. Please check network connection."
+    );
+  }
+
+  if (!disease) {
+    throw new Error("AI Model did not return a valid disease diagnosis.");
   }
 
   // Fetch Groq LPU remedy & location insights (~200ms ultra-fast inference)

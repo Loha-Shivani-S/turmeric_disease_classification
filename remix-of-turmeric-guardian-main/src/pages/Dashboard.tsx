@@ -159,46 +159,48 @@ const Dashboard = () => {
       setCurrentStage((prev) => (prev < 3 ? prev + 1 : prev));
     }, 400);
 
-    const fileToSend = await optimizeImageForUpload(imageFile, 1600);
-    const res = await runMockAnalysis(fileToSend, location?.lat, location?.lon);
-    clearInterval(stageInterval);
-    setResult(res);
-    setAnalyzing(false);
-    setCurrentStage(-1);
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const fileToSend = await optimizeImageForUpload(imageFile, 1600);
+      const res = await runMockAnalysis(fileToSend, location?.lat, location?.lon);
+      setResult(res);
 
-      let publicUrl = null;
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop() || 'jpg';
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('plant_images')
-          .upload(fileName, imageFile);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          let publicUrl = null;
+          const fileExt = imageFile.name.split('.').pop() || 'jpg';
+          const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from('plant_images')
+            .upload(fileName, imageFile);
 
-        if (!uploadError) {
-          const { data } = supabase.storage.from('plant_images').getPublicUrl(fileName);
-          publicUrl = data.publicUrl;
-        } else {
-          console.error("Image upload error:", uploadError);
+          if (!uploadError) {
+            const { data } = supabase.storage.from('plant_images').getPublicUrl(fileName);
+            publicUrl = data.publicUrl;
+          }
+
+          await supabase.from('plant_history').insert({
+            user_id: user.id,
+            image_url: publicUrl,
+            disease_name: res.disease,
+            confidence: res.confidence,
+            recommendation: res.remedy,
+          });
         }
+      } catch (err) {
+        console.error("Error saving history to Supabase:", err);
       }
-
-      const { error: dbError } = await supabase.from('plant_history').insert({
-        user_id: user.id,
-        image_url: publicUrl,
-        disease_name: res.disease,
-        confidence: res.confidence,
-        recommendation: res.remedy,
+    } catch (err: any) {
+      console.error("Analysis failed:", err);
+      toast({
+        title: "Analysis Failed",
+        description: err?.message || "Could not complete diagnosis. Please check network connection.",
+        variant: "destructive",
       });
-
-      if (dbError) {
-        console.error("Database insert error:", dbError);
-      }
-    } catch (err) {
-      console.error("Error saving history:", err);
+    } finally {
+      clearInterval(stageInterval);
+      setAnalyzing(false);
+      setCurrentStage(-1);
     }
   };
 
