@@ -64,7 +64,7 @@ download_model_if_needed()
 from predict import predict_image
 
 @spaces.GPU
-def predict(image: np.ndarray) -> str:
+def predict(image):
     if image is None:
         return "Error: No image uploaded"
     temp_path = os.path.join(ROOT, "temp_gradio_input.jpg")
@@ -86,7 +86,7 @@ def predict(image: np.ndarray) -> str:
         }
         disease = frontend_mapping.get(res['predicted_label'], res['predicted_label'])
         result = {
-            "disease":    disease,
+            "disease":    str(disease),
             "confidence": float(res['confidence']),
             "severity":   str(res['severity_label']),
             "coverage":   float(res['disease_coverage'])

@@ -1,5 +1,4 @@
 huggingface-hub
-gradio>=5.0.0
 torch
 torchvision
 torchaudio
