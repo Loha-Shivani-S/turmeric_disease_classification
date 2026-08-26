@@ -1,9 +1,4 @@
-try:
-    import spaces
-    has_spaces = True
-except Exception:
-    has_spaces = False
-
+import spaces
 import os
 import sys
 import numpy as np
@@ -44,13 +39,9 @@ for cls in classes_to_patch:
 import config as CFG
 from predict import predict_image
 
-if has_spaces:
-    @spaces.GPU
-    def run_inference(file_path):
-        return predict_image(file_path, save_report=False)
-else:
-    def run_inference(file_path):
-        return predict_image(file_path, save_report=False)
+@spaces.GPU
+def run_inference(file_path):
+    return predict_image(file_path, save_report=False)
 
 def process_file_and_predict(file_path):
     res = run_inference(file_path)
