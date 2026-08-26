@@ -115,7 +115,7 @@ export async function runMockAnalysis(
 
   try {
     const clientOptions = hfToken && hfToken.startsWith("hf_")
-      ? { hf_token: hfToken as `hf_${string}` }
+      ? { token: hfToken as `hf_${string}` }
       : {};
 
     const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
@@ -125,10 +125,11 @@ export async function runMockAnalysis(
     });
 
     if (result && result.data && result.data[0]) {
-      const raw = typeof result.data[0] === 'string' ? JSON.parse(result.data[0]) : result.data[0];
-      if (raw && raw.disease) {
-        disease = raw.disease;
-        confidence = raw.confidence ?? confidence;
+      const rawStr = result.data[0];
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      if (parsed && parsed.disease) {
+        disease = parsed.disease;
+        confidence = parsed.confidence ?? confidence;
         console.log("✓ Official @gradio/client Prediction Successful:", disease, confidence);
       }
     }
