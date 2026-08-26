@@ -21,14 +21,26 @@ if hasattr(sys.stdout, 'reconfigure'):
 os.environ["KERAS_BACKEND"] = "torch"
 import keras
 
-_orig_layer_init = keras.layers.Layer.__init__
-def _patched_layer_init(self, *args, **kwargs):
-    kwargs.pop('renorm', None)
-    kwargs.pop('renorm_clipping', None)
-    kwargs.pop('renorm_momentum', None)
-    kwargs.pop('quantization_config', None)
-    _orig_layer_init(self, *args, **kwargs)
-keras.layers.Layer.__init__ = _patched_layer_init
+classes_to_patch = [
+    keras.layers.Layer,
+    keras.layers.Dense,
+    keras.layers.BatchNormalization,
+    keras.layers.Conv2D,
+    keras.layers.DepthwiseConv2D
+]
+
+for cls in classes_to_patch:
+    orig_fn = cls.__init__
+    def make_patched(fn):
+        def patched(self, *args, **kwargs):
+            kwargs.pop('renorm', None)
+            kwargs.pop('renorm_clipping', None)
+            kwargs.pop('renorm_momentum', None)
+            kwargs.pop('quantization_config', None)
+            fn(self, *args, **kwargs)
+        return patched
+    cls.__init__ = make_patched(orig_fn)
+
 
 
 import numpy as np
