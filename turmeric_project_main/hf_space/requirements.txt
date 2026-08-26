@@ -1,4 +1,4 @@
-huggingface-hub
+huggingface-hub<0.24.0
 torch
 torchvision
 torchaudio
