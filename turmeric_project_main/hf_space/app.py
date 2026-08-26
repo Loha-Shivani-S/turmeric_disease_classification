@@ -1,6 +1,7 @@
 import spaces
 import os
 import sys
+import json
 import numpy as np
 import cv2
 import gradio as gr
@@ -65,7 +66,7 @@ from predict import predict_image
 @spaces.GPU
 def predict(image):
     if image is None:
-        return {"error": "No image uploaded"}
+        return "Error: No image uploaded"
     temp_path = os.path.join(ROOT, "temp_gradio_input.jpg")
     try:
         if isinstance(image, np.ndarray):
@@ -84,13 +85,19 @@ def predict(image):
             "aphids":           "Aphids"
         }
         disease = frontend_mapping.get(res['predicted_label'], res['predicted_label'])
-        return {
+        result = {
             "disease":    disease,
             "confidence": float(res['confidence']),
             "severity":   res['severity_label'],
             "coverage":   float(res['disease_coverage']),
-            "raw_result": res
+            "raw_result": {
+                "predicted_label": res['predicted_label'],
+                "confidence": float(res['confidence']),
+                "severity_label": res['severity_label'],
+                "disease_coverage": float(res['disease_coverage'])
+            }
         }
+        return json.dumps(result, indent=2)
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -98,9 +105,9 @@ def predict(image):
 demo = gr.Interface(
     fn=predict,
     inputs=gr.Image(type="numpy", label="Upload Turmeric Leaf Image"),
-    outputs=gr.JSON(label="Prediction Result"),
+    outputs=gr.Textbox(label="Prediction Result"),
     title="TurmeriCare ML Disease Classification API",
     description="Fast AI Disease Diagnosis API for Turmeric Plants"
 )
 
-demo.launch()
+demo.launch(server_name="0.0.0.0", server_port=7860)
