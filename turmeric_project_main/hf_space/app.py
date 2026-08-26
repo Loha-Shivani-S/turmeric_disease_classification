@@ -38,8 +38,17 @@ for cls in classes_to_patch:
 import config as CFG
 from predict import predict_image
 
+try:
+    import spaces
+    @spaces.GPU
+    def run_inference(file_path):
+        return predict_image(file_path, save_report=False)
+except ImportError:
+    def run_inference(file_path):
+        return predict_image(file_path, save_report=False)
+
 def process_file_and_predict(file_path):
-    res = predict_image(file_path, save_report=False)
+    res = run_inference(file_path)
     frontend_mapping = {
         "healthy":          "Healthy Leaf",
         "leaf_spot":        "Leaf Spot",
