@@ -116,9 +116,9 @@ const Dashboard = () => {
 
 
   useEffect(() => {
-    // Silent background ping to wake up HF Space backend on page load
-    const backendUrl = "https://loni-lolita-turmericare-backend.hf.space";
-    fetch(`${backendUrl}`).catch(() => {});
+    // Silent background ping to wake up Render backend on page load
+    const backendUrl = import.meta.env.VITE_API_URL || "https://turmericare-backend.onrender.com";
+    fetch(`${backendUrl}/health`).catch(() => {});
   }, []);
 
   const optimizeImageForUpload = (file: File, maxDim = 1600): Promise<File> => {

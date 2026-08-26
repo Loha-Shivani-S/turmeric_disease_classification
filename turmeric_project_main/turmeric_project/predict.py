@@ -151,7 +151,19 @@ def preprocess_image(img_path, img_size=CFG.IMG_SIZE):
     if not os.path.exists(img_path):
         raise FileNotFoundError(f"Image not found: {img_path}")
 
-    img = cv2.imread(img_path)
+    img = None
+    try:
+        img = cv2.imread(img_path)
+    except Exception:
+        pass
+    if img is None:
+        try:
+            from PIL import Image
+            pil_img = Image.open(img_path).convert('RGB')
+            img_rgb = np.array(pil_img)
+            img = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+        except Exception:
+            pass
     if img is None:
         raise ValueError(f"Cannot read image: {img_path}")
 

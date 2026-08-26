@@ -111,43 +111,70 @@ export async function runMockAnalysis(
   let disease = "";
   let confidence = 0;
 
+  const apiUrl = (import.meta.env.VITE_API_URL || "https://turmericare-backend.onrender.com").trim().replace(/\/$/, "");
   const hfToken = (import.meta.env.VITE_HF_TOKEN || "").trim();
 
+  // 1. Try direct Render REST API first (Fastest, no GPU quota limits)
   try {
-    const clientOptions: Record<string, any> = {};
-    if (hfToken) {
-      clientOptions.token = hfToken;
-      clientOptions.hf_token = hfToken;
-    }
+    console.log(`Attempting prediction via REST backend: ${apiUrl}/predict...`);
+    const formData = new FormData();
+    formData.append("image", imageFile);
 
-    console.log("Connecting to Hugging Face Space 'loni-lolita/turmericare-backend'...");
-    const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
-    console.log("Sending image for AI classification...");
-    const result = await client.predict("/predict", {
-      image: imageFile,
+    const response = await fetch(`${apiUrl}/predict`, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
-    console.log("Raw prediction response:", result);
-
-    if (result && result.data && result.data[0]) {
-      const rawStr = result.data[0];
-      const parsed = typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr;
-      if (parsed && parsed.disease) {
-        disease = parsed.disease;
-        confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.95;
-        console.log("✓ Official @gradio/client Prediction Successful:", disease, confidence);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.disease) {
+        disease = data.disease;
+        confidence = typeof data.confidence === "number" ? data.confidence : 0.95;
+        console.log("✓ REST Backend Prediction Successful:", disease, confidence);
       }
+    } else {
+      console.warn(`REST backend returned status ${response.status}, trying Gradio fallback...`);
     }
-  } catch (error: any) {
-    console.error("Official @gradio/client error:", error);
-    throw new Error(
-      error?.message || "Failed to analyze image with Hugging Face ML Space. Please check network connection."
-    );
+  } catch (restErr) {
+    console.warn("REST backend call failed or timed out, trying Gradio Space fallback...", restErr);
+  }
+
+  // 2. If REST didn't return a disease, try Hugging Face Gradio client as fallback
+  if (!disease) {
+    try {
+      const clientOptions: Record<string, any> = {};
+      if (hfToken) {
+        clientOptions.token = hfToken;
+        clientOptions.hf_token = hfToken;
+      }
+
+      console.log("Connecting to Hugging Face Space fallback...");
+      const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
+      const result = await client.predict("/predict", { image: imageFile });
+
+      if (result && result.data && result.data[0]) {
+        const rawStr = result.data[0];
+        const parsed = typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr;
+        if (parsed && parsed.disease) {
+          disease = parsed.disease;
+          confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.95;
+          console.log("✓ Gradio Space Fallback Prediction Successful:", disease, confidence);
+        }
+      }
+    } catch (gradioErr: any) {
+      console.error("Gradio fallback error:", gradioErr);
+    }
   }
 
   if (!disease) {
-    throw new Error("AI Model did not return a valid disease diagnosis.");
+    throw new Error(
+      "AI Disease Classification server is currently waking up or unavailable. Please try again in 10-15 seconds."
+    );
   }
 
   // Fetch Groq LPU remedy & location insights (~200ms ultra-fast inference)
