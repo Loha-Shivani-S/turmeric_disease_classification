@@ -39,12 +39,8 @@ for cls in classes_to_patch:
 import config as CFG
 from predict import predict_image
 
-@spaces.GPU
-def run_inference(file_path):
-    return predict_image(file_path, save_report=False)
-
 def process_file_and_predict(file_path):
-    res = run_inference(file_path)
+    res = predict_image(file_path, save_report=False)
     frontend_mapping = {
         "healthy":          "Healthy Leaf",
         "leaf_spot":        "Leaf Spot",
@@ -95,6 +91,7 @@ async def api_predict(image: UploadFile = File(...)):
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+@spaces.GPU
 def gradio_predict(img):
     if img is None:
         return {"error": "No image uploaded"}
