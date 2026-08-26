@@ -21,7 +21,8 @@ turmeric_project/turmeric_project/results/
 turmeric_project/turmeric_project/temp_uploads/*
 !turmeric_project/turmeric_project/temp_uploads/.gitkeep
 
-turmeric_project_main/turmeric_project/saved_models/
+turmeric_project_main/turmeric_project/saved_models/*
+!turmeric_project_main/turmeric_project/saved_models/mobilenet_final.keras
 turmeric_project_main/turmeric_project/results/
 turmeric_project_main/turmeric_project/temp_uploads/*
 !turmeric_project_main/turmeric_project/temp_uploads/.gitkeep
