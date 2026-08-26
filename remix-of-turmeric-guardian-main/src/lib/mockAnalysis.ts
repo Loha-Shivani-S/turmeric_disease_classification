@@ -100,10 +100,6 @@ export async function runMockAnalysis(
   lat?: number,
   lon?: number
 ): Promise<AnalysisResult> {
-  // Simulate processing time for each stage locally
-  await new Promise((r) => setTimeout(r, 800)); // Stage 1
-  await new Promise((r) => setTimeout(r, 600)); // Stage 2
-
   const formData = new FormData();
   formData.append('image', imageFile);
 
@@ -129,10 +125,8 @@ export async function runMockAnalysis(
     console.error("Backend AI server failed, falling back to mock response:", error);
   }
 
-  // Stage 3 & 4: Get AI-powered insights from Grok
-  await new Promise((r) => setTimeout(r, 400)); // Stage 3
+  // Fetch AI remedies & location insights from Groq
   const grok = await getGrokInsights(disease, lat, lon);
-  await new Promise((r) => setTimeout(r, 400)); // Stage 4
 
   const remedy = grok?.remedy ?? remedies[disease] ?? "Continue regular care and monitoring.";
   const locationInsight = grok?.locationInsight ?? (

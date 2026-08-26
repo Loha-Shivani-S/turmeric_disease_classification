@@ -115,18 +115,53 @@ const Dashboard = () => {
 
 
 
+  useEffect(() => {
+    // Silent background ping to wake up Render server on page load
+    const backendUrl = import.meta.env.VITE_API_URL || "https://turmericare-backend.onrender.com";
+    fetch(`${backendUrl}/health`).catch(() => {});
+  }, []);
+
+  const optimizeImageForUpload = (file: File, maxDim = 1600): Promise<File> => {
+    return new Promise((resolve) => {
+      if (file.size < 1000000) { resolve(file); return; }
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const { naturalWidth: w, naturalHeight: h } = img;
+        if (w <= maxDim && h <= maxDim) { resolve(file); return; }
+        const scale = maxDim / Math.max(w, h);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+        canvas.toBlob((blob) => {
+          resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file);
+        }, "image/jpeg", 0.95);
+      };
+      img.onerror = () => resolve(file);
+      img.src = url;
+    });
+  };
+
   const analyze = async () => {
     if (!imageFile) return;
     setAnalyzing(true);
     setResult(null);
+    setCurrentStage(0);
 
-    for (let i = 0; i < 4; i++) {
-      setCurrentStage(i);
-      await new Promise((r) => setTimeout(r, 800));
-    }
+    const stageInterval = setInterval(() => {
+      setCurrentStage((prev) => (prev < 3 ? prev + 1 : prev));
+    }, 400);
 
-    // Send original full-resolution image directly to backend
-    const res = await runMockAnalysis(imageFile, location?.lat, location?.lon);
+    const fileToSend = await optimizeImageForUpload(imageFile, 1600);
+    const res = await runMockAnalysis(fileToSend, location?.lat, location?.lon);
+    clearInterval(stageInterval);
     setResult(res);
     setAnalyzing(false);
     setCurrentStage(-1);
