@@ -111,18 +111,24 @@ export async function runMockAnalysis(
   let disease = "Healthy Leaf";
   let confidence = 0.95;
 
-  const hfToken = import.meta.env.VITE_HF_TOKEN;
+  const hfToken = import.meta.env.VITE_HF_TOKEN || "";
 
   try {
-    const clientOptions = hfToken && hfToken.startsWith("hf_")
-      ? { token: hfToken as `hf_${string}` }
-      : {};
+    const clientOptions: Record<string, any> = {};
+    if (hfToken && hfToken.trim().length > 0) {
+      clientOptions.token = hfToken.trim();
+      clientOptions.hf_token = hfToken.trim();
+    }
 
+    console.log("Connecting to Hugging Face Space 'loni-lolita/turmericare-backend'...");
     const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
 
+    console.log("Sending image for prediction...");
     const result = await client.predict("/predict", {
       image: imageFile,
     });
+
+    console.log("Raw prediction result from HF Space:", result);
 
     if (result && result.data && result.data[0]) {
       const rawStr = result.data[0];

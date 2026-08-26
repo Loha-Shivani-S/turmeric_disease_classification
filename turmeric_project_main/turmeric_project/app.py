@@ -69,7 +69,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # ─────────────────────────────────────────────────────────────
 # Auto-download model from Hugging Face if not present locally
 # ─────────────────────────────────────────────────────────────
-HF_REPO_ID = "loni-lolita/turmeric-disease-model"
+HF_REPO_ID = "loni-lolita/turmericare-backend"
 MODEL_FILENAME = "mobilenet_final.keras"
 
 def download_model_if_needed():
@@ -87,7 +87,8 @@ def download_model_if_needed():
             repo_id=HF_REPO_ID,
             filename=MODEL_FILENAME,
             local_dir=CFG.MODEL_DIR,
-            local_dir_use_symlinks=False
+            local_dir_use_symlinks=False,
+            force_download=True
         )
         print(f"  ✓ Model downloaded to: {downloaded_path}")
     except Exception as e:
