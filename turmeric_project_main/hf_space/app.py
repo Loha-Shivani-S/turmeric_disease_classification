@@ -64,7 +64,7 @@ download_model_if_needed()
 from predict import predict_image
 
 @spaces.GPU
-def predict(image):
+def predict(image: np.ndarray) -> str:
     if image is None:
         return "Error: No image uploaded"
     temp_path = os.path.join(ROOT, "temp_gradio_input.jpg")
@@ -88,14 +88,8 @@ def predict(image):
         result = {
             "disease":    disease,
             "confidence": float(res['confidence']),
-            "severity":   res['severity_label'],
-            "coverage":   float(res['disease_coverage']),
-            "raw_result": {
-                "predicted_label": res['predicted_label'],
-                "confidence": float(res['confidence']),
-                "severity_label": res['severity_label'],
-                "disease_coverage": float(res['disease_coverage'])
-            }
+            "severity":   str(res['severity_label']),
+            "coverage":   float(res['disease_coverage'])
         }
         return json.dumps(result, indent=2)
     finally:
@@ -110,4 +104,4 @@ demo = gr.Interface(
     description="Fast AI Disease Diagnosis API for Turmeric Plants"
 )
 
-demo.launch(server_name="0.0.0.0", server_port=7860)
+demo.launch()

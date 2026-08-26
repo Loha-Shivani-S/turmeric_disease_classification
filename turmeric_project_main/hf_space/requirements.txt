@@ -1,5 +1,5 @@
-huggingface-hub==0.23.5
-gradio>=4.44.0
+huggingface-hub
+gradio>=5.0.0
 torch
 torchvision
 torchaudio
@@ -7,6 +7,3 @@ keras>=3.0.0
 opencv-python-headless
 numpy
 matplotlib
-fastapi
-uvicorn
-python-multipart
