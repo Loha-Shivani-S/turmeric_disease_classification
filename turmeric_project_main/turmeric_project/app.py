@@ -11,13 +11,15 @@ if hasattr(sys.stdout, 'reconfigure'):
 os.environ["KERAS_BACKEND"] = "torch"
 import keras
 
-_orig_bn_init = keras.layers.BatchNormalization.__init__
-def _patched_bn_init(self, *args, **kwargs):
+_orig_layer_init = keras.layers.Layer.__init__
+def _patched_layer_init(self, *args, **kwargs):
     kwargs.pop('renorm', None)
     kwargs.pop('renorm_clipping', None)
     kwargs.pop('renorm_momentum', None)
-    _orig_bn_init(self, *args, **kwargs)
-keras.layers.BatchNormalization.__init__ = _patched_bn_init
+    kwargs.pop('quantization_config', None)
+    _orig_layer_init(self, *args, **kwargs)
+keras.layers.Layer.__init__ = _patched_layer_init
+
 
 
 
