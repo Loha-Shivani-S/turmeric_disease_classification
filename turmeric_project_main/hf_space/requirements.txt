@@ -1,0 +1,12 @@
+torch
+torchvision
+torchaudio
+keras>=3.0.0
+opencv-python-headless
+numpy
+matplotlib
+huggingface_hub
+gradio
+fastapi
+uvicorn
+python-multipart
