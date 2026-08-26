@@ -8,6 +8,18 @@ from werkzeug.utils import secure_filename
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
+os.environ["KERAS_BACKEND"] = "torch"
+import keras
+
+_orig_bn_init = keras.layers.BatchNormalization.__init__
+def _patched_bn_init(self, *args, **kwargs):
+    kwargs.pop('renorm', None)
+    kwargs.pop('renorm_clipping', None)
+    kwargs.pop('renorm_momentum', None)
+    _orig_bn_init(self, *args, **kwargs)
+keras.layers.BatchNormalization.__init__ = _patched_bn_init
+
+
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
