@@ -121,7 +121,7 @@ export async function runMockAnalysis(
     formData.append("image", imageFile);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s max to accommodate Render cold starts
 
     const response = await fetch(`${apiUrl}/predict`, {
       method: "POST",
