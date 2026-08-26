@@ -1,5 +1,3 @@
-import { Client } from "@gradio/client";
-
 export interface AnalysisResult {
   isTurmeric: boolean;
   growthStatus: "proper" | "underdeveloped" | "overgrown";
@@ -45,7 +43,7 @@ export function getLocationInsight(lat: number, lon: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Groq AI — Ultra-fast LPU model (llama-3.1-8b-instant ~200ms)
+// Groq AI — Dynamic remedy & location insights (ultra-fast LPU inference)
 // ─────────────────────────────────────────────────────────────
 async function getGrokInsights(
   disease: string,
@@ -59,19 +57,16 @@ async function getGrokInsights(
     ? `The farmer's exact GPS location is ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E.`
     : "No GPS location was provided. Give general advice for Indian turmeric farmers.";
 
-  const prompt = `You are TurmeriCare AI, an expert agricultural assistant specialized in turmeric farming in India.
+  const prompt = `You are TurmeriCare AI, an expert agricultural assistant specialized in turmeric farming in India and South Asia.
 
 A turmeric plant has been diagnosed with: "${disease}".
 ${locationCtx}
 
-Respond with ONLY a valid JSON object in this format:
+Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text) in exactly this format:
 {
-  "remedy": "Practical 2-3 sentence organic remedy with emojis.",
-  "locationInsight": "📍 Region | 🌡️ Climate | 🌱 Soil | 👨‍🌾 Local Tip"
+  "remedy": "A specific, practical, 3-4 sentence remedy using organic/natural methods that a small farmer can easily follow. Use simple language and include relevant emojis.",
+  "locationInsight": "📍 Location: [Identify the region/state/country from the GPS coordinates]\\n🌡️ Climate: [Describe the climate zone and seasonal conditions relevant to turmeric]\\n🌱 Soil: [Describe the typical soil type in that region and how it affects turmeric growth]\\n💧 Water: [Describe typical rainfall/irrigation needs for that location]\\n👨‍🌾 Local Tip: [One highly specific growing tip for turmeric in that exact region]"
 }`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s max
 
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -80,25 +75,22 @@ Respond with ONLY a valid JSON object in this format:
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      signal: controller.signal,
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.5,
-        max_tokens: 220,
+        temperature: 0.7,
+        max_tokens: 512,
       }),
     });
-    clearTimeout(timeoutId);
 
-    if (!response.ok) throw new Error(`Groq API error: ${response.status}`);
+    if (!response.ok) throw new Error(`Grok API error: ${response.status}`);
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content ?? "";
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   } catch (err) {
-    clearTimeout(timeoutId);
-    console.warn("Groq API timed out or failed, using instant local fallback:", err);
+    console.error("Grok API failed, using fallback:", err);
     return null;
   }
 }
@@ -108,76 +100,32 @@ export async function runMockAnalysis(
   lat?: number,
   lon?: number
 ): Promise<AnalysisResult> {
-  let disease = "";
-  let confidence = 0;
+  const formData = new FormData();
+  formData.append('image', imageFile);
 
-  const apiUrl = (import.meta.env.VITE_API_URL || "https://turmericare-backend.onrender.com").trim().replace(/\/$/, "");
-  const hfToken = (import.meta.env.VITE_HF_TOKEN || "").trim();
+  let disease = "Healthy Leaf";
+  let confidence = 0.95;
 
-  // 1. Try direct Render REST API first (Fastest, no GPU quota limits)
   try {
-    console.log(`Attempting prediction via REST backend: ${apiUrl}/predict...`);
-    const formData = new FormData();
-    formData.append("image", imageFile);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s max to accommodate Render cold starts
-
-    const response = await fetch(`${apiUrl}/predict`, {
-      method: "POST",
+    const API_URL = import.meta.env.VITE_API_URL || 'https://turmericare-backend.onrender.com';
+    const response = await fetch(`${API_URL}/predict`, {
+      method: 'POST',
       body: formData,
-      signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data && data.disease) {
-        disease = data.disease;
-        confidence = typeof data.confidence === "number" ? data.confidence : 0.95;
-        console.log("✓ REST Backend Prediction Successful:", disease, confidence);
-      }
-    } else {
-      console.warn(`REST backend returned status ${response.status}, trying Gradio fallback...`);
+    
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
     }
-  } catch (restErr) {
-    console.warn("REST backend call failed or timed out, trying Gradio Space fallback...", restErr);
+
+    const data = await response.json();
+    disease = data.disease;
+    confidence = data.confidence;
+
+  } catch (error) {
+    console.error("Backend AI server failed, falling back to mock response:", error);
   }
 
-  // 2. If REST didn't return a disease, try Hugging Face Gradio client as fallback
-  if (!disease) {
-    try {
-      const clientOptions: Record<string, any> = {};
-      if (hfToken) {
-        clientOptions.token = hfToken;
-        clientOptions.hf_token = hfToken;
-      }
-
-      console.log("Connecting to Hugging Face Space fallback...");
-      const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
-      const result = await client.predict("/predict", { image: imageFile });
-
-      if (result && result.data && result.data[0]) {
-        const rawStr = result.data[0];
-        const parsed = typeof rawStr === "string" ? JSON.parse(rawStr) : rawStr;
-        if (parsed && parsed.disease) {
-          disease = parsed.disease;
-          confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.95;
-          console.log("✓ Gradio Space Fallback Prediction Successful:", disease, confidence);
-        }
-      }
-    } catch (gradioErr: any) {
-      console.error("Gradio fallback error:", gradioErr);
-    }
-  }
-
-  if (!disease) {
-    throw new Error(
-      "AI Disease Classification server is currently waking up or unavailable. Please try again in 10-15 seconds."
-    );
-  }
-
-  // Fetch Groq LPU remedy & location insights (~200ms ultra-fast inference)
+  // Fetch AI remedies & location insights from Groq
   const grok = await getGrokInsights(disease, lat, lon);
 
   const remedy = grok?.remedy ?? remedies[disease] ?? "Continue regular care and monitoring.";

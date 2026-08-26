@@ -69,7 +69,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # ─────────────────────────────────────────────────────────────
 # Auto-download model from Hugging Face if not present locally
 # ─────────────────────────────────────────────────────────────
-HF_REPO_ID = "loni-lolita/turmericare-backend"
+HF_REPO_ID = "loni-lolita/turmeric-disease-model"
 MODEL_FILENAME = "mobilenet_final.keras"
 
 def download_model_if_needed():
@@ -87,8 +87,7 @@ def download_model_if_needed():
             repo_id=HF_REPO_ID,
             filename=MODEL_FILENAME,
             local_dir=CFG.MODEL_DIR,
-            local_dir_use_symlinks=False,
-            force_download=True
+            local_dir_use_symlinks=False
         )
         print(f"  ✓ Model downloaded to: {downloaded_path}")
     except Exception as e:
@@ -119,13 +118,14 @@ def predict():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    image_bytes = file.read()
-    if not image_bytes:
-        return jsonify({'error': 'Uploaded image is empty'}), 400
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
 
     try:
-        result = predict_image(image_bytes, save_report=False)
+        result = predict_image(filepath, save_report=False)
 
+        # Map Python class names to user-friendly display names
         frontend_mapping = {
             "healthy":          "Healthy Leaf",
             "leaf_spot":        "Leaf Spot",
@@ -140,6 +140,9 @@ def predict():
             result['predicted_label'], result['predicted_label']
         )
 
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
         return jsonify({
             "disease":    frontend_disease,
             "confidence": result['confidence'],
@@ -151,6 +154,8 @@ def predict():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        if os.path.exists(filepath):
+            os.remove(filepath)
         return jsonify({'error': str(e)}), 500
 
 

@@ -145,44 +145,15 @@ def load_models():
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
-def preprocess_image(img_input, img_size=CFG.IMG_SIZE):
-    """Load and preprocess a single image for inference (path, bytes, or numpy array)."""
-    img = None
+def preprocess_image(img_path, img_size=CFG.IMG_SIZE):
+    """Load and preprocess a single image for inference."""
+    img_path = str(img_path)
+    if not os.path.exists(img_path):
+        raise FileNotFoundError(f"Image not found: {img_path}")
 
-    if isinstance(img_input, np.ndarray):
-        img = img_input if img_input.ndim == 3 and img_input.shape[-1] == 3 else cv2.cvtColor(img_input, cv2.COLOR_RGBA2BGR)
-    elif isinstance(img_input, (bytes, bytearray)):
-        nparr = np.frombuffer(img_input, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None:
-            try:
-                from PIL import Image
-                import io
-                pil_img = Image.open(io.BytesIO(img_input)).convert('RGB')
-                img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-            except Exception:
-                pass
-    else:
-        img_path = str(img_input)
-        if not os.path.exists(img_path):
-            raise FileNotFoundError(f"Image not found: {img_path}")
-        try:
-            img = cv2.imread(img_path)
-        except Exception:
-            pass
-        if img is None:
-            try:
-                from PIL import Image
-                pil_img = Image.open(img_path).convert('RGB')
-                img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-            except Exception:
-                pass
-
+    img = cv2.imread(img_path)
     if img is None:
-        raise ValueError("Cannot read or decode input image")
-
-    if len(img.shape) == 2:
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        raise ValueError(f"Cannot read image: {img_path}")
 
     img_rgb  = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     original = img_rgb.copy()

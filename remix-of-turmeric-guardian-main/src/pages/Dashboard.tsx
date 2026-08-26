@@ -116,7 +116,7 @@ const Dashboard = () => {
 
 
   useEffect(() => {
-    // Silent background ping to wake up Render backend on page load
+    // Silent background ping to wake up Render server on page load
     const backendUrl = import.meta.env.VITE_API_URL || "https://turmericare-backend.onrender.com";
     fetch(`${backendUrl}/health`).catch(() => {});
   }, []);
@@ -159,48 +159,46 @@ const Dashboard = () => {
       setCurrentStage((prev) => (prev < 3 ? prev + 1 : prev));
     }, 400);
 
+    const fileToSend = await optimizeImageForUpload(imageFile, 1600);
+    const res = await runMockAnalysis(fileToSend, location?.lat, location?.lon);
+    clearInterval(stageInterval);
+    setResult(res);
+    setAnalyzing(false);
+    setCurrentStage(-1);
+
     try {
-      const fileToSend = await optimizeImageForUpload(imageFile, 1600);
-      const res = await runMockAnalysis(fileToSend, location?.lat, location?.lon);
-      setResult(res);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          let publicUrl = null;
-          const fileExt = imageFile.name.split('.').pop() || 'jpg';
-          const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage
-            .from('plant_images')
-            .upload(fileName, imageFile);
+      let publicUrl = null;
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop() || 'jpg';
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('plant_images')
+          .upload(fileName, imageFile);
 
-          if (!uploadError) {
-            const { data } = supabase.storage.from('plant_images').getPublicUrl(fileName);
-            publicUrl = data.publicUrl;
-          }
-
-          await supabase.from('plant_history').insert({
-            user_id: user.id,
-            image_url: publicUrl,
-            disease_name: res.disease,
-            confidence: res.confidence,
-            recommendation: res.remedy,
-          });
+        if (!uploadError) {
+          const { data } = supabase.storage.from('plant_images').getPublicUrl(fileName);
+          publicUrl = data.publicUrl;
+        } else {
+          console.error("Image upload error:", uploadError);
         }
-      } catch (err) {
-        console.error("Error saving history to Supabase:", err);
       }
-    } catch (err: any) {
-      console.error("Analysis failed:", err);
-      toast({
-        title: "Analysis Failed",
-        description: err?.message || "Could not complete diagnosis. Please check network connection.",
-        variant: "destructive",
+
+      const { error: dbError } = await supabase.from('plant_history').insert({
+        user_id: user.id,
+        image_url: publicUrl,
+        disease_name: res.disease,
+        confidence: res.confidence,
+        recommendation: res.remedy,
       });
-    } finally {
-      clearInterval(stageInterval);
-      setAnalyzing(false);
-      setCurrentStage(-1);
+
+      if (dbError) {
+        console.error("Database insert error:", dbError);
+      }
+    } catch (err) {
+      console.error("Error saving history:", err);
     }
   };
 
