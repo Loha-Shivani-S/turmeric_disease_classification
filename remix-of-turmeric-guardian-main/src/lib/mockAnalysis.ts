@@ -110,6 +110,9 @@ export async function runMockAnalysis(
   let confidence = 0.95;
 
   const hfBaseUrl = "https://loni-lolita-turmericare-backend.hf.space";
+  const hfToken = import.meta.env.VITE_HF_TOKEN;
+
+  const authHeaders: Record<string, string> = hfToken ? { "Authorization": `Bearer ${hfToken}` } : {};
 
   try {
     // 1. Upload file to Gradio upload endpoint
@@ -118,6 +121,7 @@ export async function runMockAnalysis(
 
     const uploadRes = await fetch(`${hfBaseUrl}/gradio_api/upload`, {
       method: 'POST',
+      headers: { ...authHeaders },
       body: uploadFormData,
     });
 
@@ -128,7 +132,7 @@ export async function runMockAnalysis(
       // 2. Call prediction event
       const eventRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           data: [{ path: uploadedFilePath, meta: { _type: 'gradio.FileData' } }]
         }),
@@ -137,7 +141,9 @@ export async function runMockAnalysis(
       const { event_id } = await eventRes.json();
 
       // 3. Fetch SSE result
-      const streamRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict/${event_id}`);
+      const streamRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict/${event_id}`, {
+        headers: { ...authHeaders }
+      });
       const streamText = await streamRes.text();
 
       const match = streamText.match(/data:\s*\["([\s\S]*?)"\]/);
