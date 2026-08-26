@@ -43,7 +43,7 @@ export function getLocationInsight(lat: number, lon: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Groq AI — Dynamic remedy & location insights (ultra-fast LPU inference)
+// Groq AI — Dynamic remedy & location insights with 1.8s timeout
 // ─────────────────────────────────────────────────────────────
 async function getGrokInsights(
   disease: string,
@@ -68,6 +68,9 @@ Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text)
   "locationInsight": "📍 Location: [Identify the region/state/country from the GPS coordinates]\\n🌡️ Climate: [Describe the climate zone and seasonal conditions relevant to turmeric]\\n🌱 Soil: [Describe the typical soil type in that region and how it affects turmeric growth]\\n💧 Water: [Describe typical rainfall/irrigation needs for that location]\\n👨‍🌾 Local Tip: [One highly specific growing tip for turmeric in that exact region]"
 }`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1800); // 1.8s timeout for instant UI response
+
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -75,6 +78,7 @@ Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text)
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
@@ -82,6 +86,7 @@ Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text)
         max_tokens: 512,
       }),
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) throw new Error(`Grok API error: ${response.status}`);
 
@@ -90,7 +95,8 @@ Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text)
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   } catch (err) {
-    console.error("Grok API failed, using fallback:", err);
+    clearTimeout(timeoutId);
+    console.warn("Groq API timed out or failed, using instant local fallback:", err);
     return null;
   }
 }
@@ -103,7 +109,8 @@ export async function runMockAnalysis(
   let disease = "Healthy Leaf";
   let confidence = 0.95;
 
-  const hfBaseUrl = import.meta.env.VITE_API_URL || 'https://loni-lolita-turmericare-backend.hf.space';
+  // Always target fast Hugging Face ZeroGPU backend
+  const hfBaseUrl = "https://loni-lolita-turmericare-backend.hf.space";
 
   try {
     // 1. Upload file to Gradio upload endpoint
@@ -115,18 +122,7 @@ export async function runMockAnalysis(
       body: uploadFormData,
     });
 
-    if (!uploadRes.ok) {
-      // Fallback to standard /predict endpoint
-      const legacyFormData = new FormData();
-      legacyFormData.append('image', imageFile);
-      const legacyRes = await fetch(`${hfBaseUrl}/predict`, {
-        method: 'POST',
-        body: legacyFormData,
-      });
-      const data = await legacyRes.json();
-      disease = data.disease;
-      confidence = data.confidence;
-    } else {
+    if (uploadRes.ok) {
       const uploadData = await uploadRes.json();
       const uploadedFilePath = uploadData[0];
 
@@ -141,11 +137,10 @@ export async function runMockAnalysis(
 
       const { event_id } = await eventRes.json();
 
-      // 3. Stream prediction result SSE
+      // 3. Fetch SSE result
       const streamRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict/${event_id}`);
       const streamText = await streamRes.text();
 
-      // Extract JSON inside data: ["..."]
       const match = streamText.match(/data:\s*\["([\s\S]*?)"\]/);
       if (match && match[1]) {
         const rawJsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
@@ -158,7 +153,7 @@ export async function runMockAnalysis(
     console.error("Backend AI server call error:", error);
   }
 
-  // Fetch AI remedies & location insights from Groq
+  // Fetch AI remedies & location insights (max 1.8s timeout)
   const grok = await getGrokInsights(disease, lat, lon);
 
   const remedy = grok?.remedy ?? remedies[disease] ?? "Continue regular care and monitoring.";
