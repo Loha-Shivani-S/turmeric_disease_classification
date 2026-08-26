@@ -1,3 +1,5 @@
+import { Client } from "@gradio/client";
+
 export interface AnalysisResult {
   isTurmeric: boolean;
   growthStatus: "proper" | "underdeveloped" | "overgrown";
@@ -109,29 +111,29 @@ export async function runMockAnalysis(
   let disease = "Healthy Leaf";
   let confidence = 0.95;
 
-  const hfBaseUrl = "https://loni-lolita-turmericare-backend.hf.space";
+  const hfToken = import.meta.env.VITE_HF_TOKEN;
 
   try {
-    const formData = new FormData();
-    formData.append('image', imageFile);
+    const clientOptions = hfToken && hfToken.startsWith("hf_")
+      ? { hf_token: hfToken as `hf_${string}` }
+      : {};
 
-    const response = await fetch(`${hfBaseUrl}/predict`, {
-      method: 'POST',
-      body: formData,
+    const client = await Client.connect("loni-lolita/turmericare-backend", clientOptions);
+
+    const result = await client.predict("/predict", {
+      image: imageFile,
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data && data.disease) {
-        disease = data.disease;
-        confidence = data.confidence ?? confidence;
-        console.log("✓ Direct API Prediction Successful:", disease, confidence);
+    if (result && result.data && result.data[0]) {
+      const raw = typeof result.data[0] === 'string' ? JSON.parse(result.data[0]) : result.data[0];
+      if (raw && raw.disease) {
+        disease = raw.disease;
+        confidence = raw.confidence ?? confidence;
+        console.log("✓ Official @gradio/client Prediction Successful:", disease, confidence);
       }
-    } else {
-      console.warn("Direct predict endpoint returned status:", response.status);
     }
   } catch (error) {
-    console.error("Backend AI server call error:", error);
+    console.error("Official @gradio/client error:", error);
   }
 
   // Fetch Groq LPU remedy & location insights (~200ms ultra-fast inference)
