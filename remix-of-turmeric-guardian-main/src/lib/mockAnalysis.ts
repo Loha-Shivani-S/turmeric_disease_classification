@@ -100,29 +100,62 @@ export async function runMockAnalysis(
   lat?: number,
   lon?: number
 ): Promise<AnalysisResult> {
-  const formData = new FormData();
-  formData.append('image', imageFile);
-
   let disease = "Healthy Leaf";
   let confidence = 0.95;
 
+  const hfBaseUrl = import.meta.env.VITE_API_URL || 'https://loni-lolita-turmericare-backend.hf.space';
+
   try {
-    const API_URL = import.meta.env.VITE_API_URL || 'https://turmericare-backend.onrender.com';
-    const response = await fetch(`${API_URL}/predict`, {
+    // 1. Upload file to Gradio upload endpoint
+    const uploadFormData = new FormData();
+    uploadFormData.append('files', imageFile);
+
+    const uploadRes = await fetch(`${hfBaseUrl}/gradio_api/upload`, {
       method: 'POST',
-      body: formData,
+      body: uploadFormData,
     });
-    
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+
+    if (!uploadRes.ok) {
+      // Fallback to standard /predict endpoint
+      const legacyFormData = new FormData();
+      legacyFormData.append('image', imageFile);
+      const legacyRes = await fetch(`${hfBaseUrl}/predict`, {
+        method: 'POST',
+        body: legacyFormData,
+      });
+      const data = await legacyRes.json();
+      disease = data.disease;
+      confidence = data.confidence;
+    } else {
+      const uploadData = await uploadRes.json();
+      const uploadedFilePath = uploadData[0];
+
+      // 2. Call prediction event
+      const eventRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [{ path: uploadedFilePath, meta: { _type: 'gradio.FileData' } }]
+        }),
+      });
+
+      const { event_id } = await eventRes.json();
+
+      // 3. Stream prediction result SSE
+      const streamRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict/${event_id}`);
+      const streamText = await streamRes.text();
+
+      // Extract JSON inside data: ["..."]
+      const match = streamText.match(/data:\s*\["([\s\S]*?)"\]/);
+      if (match && match[1]) {
+        const rawJsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        const parsed = JSON.parse(rawJsonStr);
+        disease = parsed.disease || disease;
+        confidence = parsed.confidence ?? confidence;
+      }
     }
-
-    const data = await response.json();
-    disease = data.disease;
-    confidence = data.confidence;
-
   } catch (error) {
-    console.error("Backend AI server failed, falling back to mock response:", error);
+    console.error("Backend AI server call error:", error);
   }
 
   // Fetch AI remedies & location insights from Groq
