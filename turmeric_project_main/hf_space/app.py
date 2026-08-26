@@ -102,4 +102,4 @@ demo = gr.Interface(
     description="Fast AI Disease Diagnosis API for Turmeric Plants"
 )
 
-demo.launch()
+demo.launch(cors_allowed_origins=["*"])
