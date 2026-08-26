@@ -34,6 +34,32 @@ for cls in classes_to_patch:
     cls.__init__ = make_patched(orig_fn)
 
 import config as CFG
+
+# Auto-download model weights from Hugging Face if missing
+HF_REPO_ID = "loni-lolita/turmeric-disease-model"
+MODEL_FILENAME = "mobilenet_final.keras"
+
+def download_model_if_needed():
+    os.makedirs(CFG.MODEL_DIR, exist_ok=True)
+    clf_path = os.path.join(CFG.MODEL_DIR, MODEL_FILENAME)
+    if os.path.exists(clf_path):
+        print(f"  ✓ Model already exists at: {clf_path}")
+        return
+
+    print(f"  Downloading model from Hugging Face: {HF_REPO_ID}/{MODEL_FILENAME} to {CFG.MODEL_DIR}")
+    try:
+        from huggingface_hub import hf_hub_download
+        downloaded_path = hf_hub_download(
+            repo_id=HF_REPO_ID,
+            filename=MODEL_FILENAME,
+            local_dir=CFG.MODEL_DIR
+        )
+        print(f"  ✓ Model downloaded to: {downloaded_path}")
+    except Exception as e:
+        print(f"  ✗ Model download failed: {e}")
+
+download_model_if_needed()
+
 from predict import predict_image
 
 @spaces.GPU
