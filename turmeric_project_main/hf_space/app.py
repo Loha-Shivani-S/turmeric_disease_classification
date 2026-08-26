@@ -1,4 +1,3 @@
-import spaces
 import os
 import sys
 import json
@@ -63,7 +62,6 @@ download_model_if_needed()
 
 from predict import predict_image
 
-@spaces.GPU
 def predict(image):
     if image is None:
         return "Error: No image uploaded"
