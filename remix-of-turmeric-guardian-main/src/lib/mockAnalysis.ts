@@ -146,12 +146,26 @@ export async function runMockAnalysis(
       });
       const streamText = await streamRes.text();
 
-      const match = streamText.match(/data:\s*\["([\s\S]*?)"\]/);
-      if (match && match[1]) {
-        const rawJsonStr = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-        const parsed = JSON.parse(rawJsonStr);
-        disease = parsed.disease || disease;
-        confidence = parsed.confidence ?? confidence;
+      // Parse SSE stream response natively
+      const lines = streamText.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data:')) {
+          const jsonPayload = line.substring(5).trim();
+          try {
+            const arrayData = JSON.parse(jsonPayload);
+            if (Array.isArray(arrayData) && arrayData[0]) {
+              const item = typeof arrayData[0] === 'string' ? JSON.parse(arrayData[0]) : arrayData[0];
+              if (item && item.disease) {
+                disease = item.disease;
+                confidence = item.confidence ?? confidence;
+                console.log("✓ Live AI Prediction Parsed Successfully:", disease, confidence);
+                break;
+              }
+            }
+          } catch (e) {
+            // Continuation line
+          }
+        }
       }
     }
   } catch (error) {
