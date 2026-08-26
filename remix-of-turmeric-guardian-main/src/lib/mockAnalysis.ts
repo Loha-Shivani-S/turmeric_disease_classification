@@ -43,7 +43,7 @@ export function getLocationInsight(lat: number, lon: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Groq AI — Dynamic remedy & location insights with 1.8s timeout
+// Groq AI — Ultra-fast LPU model (llama-3.1-8b-instant ~200ms)
 // ─────────────────────────────────────────────────────────────
 async function getGrokInsights(
   disease: string,
@@ -57,19 +57,19 @@ async function getGrokInsights(
     ? `The farmer's exact GPS location is ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E.`
     : "No GPS location was provided. Give general advice for Indian turmeric farmers.";
 
-  const prompt = `You are TurmeriCare AI, an expert agricultural assistant specialized in turmeric farming in India and South Asia.
+  const prompt = `You are TurmeriCare AI, an expert agricultural assistant specialized in turmeric farming in India.
 
 A turmeric plant has been diagnosed with: "${disease}".
 ${locationCtx}
 
-Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text) in exactly this format:
+Respond with ONLY a valid JSON object in this format:
 {
-  "remedy": "A specific, practical, 3-4 sentence remedy using organic/natural methods that a small farmer can easily follow. Use simple language and include relevant emojis.",
-  "locationInsight": "📍 Location: [Identify the region/state/country from the GPS coordinates]\\n🌡️ Climate: [Describe the climate zone and seasonal conditions relevant to turmeric]\\n🌱 Soil: [Describe the typical soil type in that region and how it affects turmeric growth]\\n💧 Water: [Describe typical rainfall/irrigation needs for that location]\\n👨‍🌾 Local Tip: [One highly specific growing tip for turmeric in that exact region]"
+  "remedy": "Practical 2-3 sentence organic remedy with emojis.",
+  "locationInsight": "📍 Region | 🌡️ Climate | 🌱 Soil | 👨‍🌾 Local Tip"
 }`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1800); // 1.8s timeout for instant UI response
+  const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s max
 
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -80,15 +80,15 @@ Respond with ONLY a valid JSON object (no markdown, no backticks, no extra text)
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 512,
+        temperature: 0.5,
+        max_tokens: 220,
       }),
     });
     clearTimeout(timeoutId);
 
-    if (!response.ok) throw new Error(`Grok API error: ${response.status}`);
+    if (!response.ok) throw new Error(`Groq API error: ${response.status}`);
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content ?? "";
@@ -109,7 +109,6 @@ export async function runMockAnalysis(
   let disease = "Healthy Leaf";
   let confidence = 0.95;
 
-  // Always target fast Hugging Face ZeroGPU backend
   const hfBaseUrl = "https://loni-lolita-turmericare-backend.hf.space";
 
   try {
@@ -153,7 +152,7 @@ export async function runMockAnalysis(
     console.error("Backend AI server call error:", error);
   }
 
-  // Fetch AI remedies & location insights (max 1.8s timeout)
+  // Fetch Groq LPU remedy & location insights (~200ms ultra-fast inference)
   const grok = await getGrokInsights(disease, lat, lon);
 
   const remedy = grok?.remedy ?? remedies[disease] ?? "Continue regular care and monitoring.";
