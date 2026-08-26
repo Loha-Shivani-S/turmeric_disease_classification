@@ -110,63 +110,25 @@ export async function runMockAnalysis(
   let confidence = 0.95;
 
   const hfBaseUrl = "https://loni-lolita-turmericare-backend.hf.space";
-  const hfToken = import.meta.env.VITE_HF_TOKEN;
-
-  const authHeaders: Record<string, string> = hfToken ? { "Authorization": `Bearer ${hfToken}` } : {};
 
   try {
-    // 1. Upload file to Gradio upload endpoint
-    const uploadFormData = new FormData();
-    uploadFormData.append('files', imageFile);
+    const formData = new FormData();
+    formData.append('image', imageFile);
 
-    const uploadRes = await fetch(`${hfBaseUrl}/gradio_api/upload`, {
+    const response = await fetch(`${hfBaseUrl}/predict`, {
       method: 'POST',
-      headers: { ...authHeaders },
-      body: uploadFormData,
+      body: formData,
     });
 
-    if (uploadRes.ok) {
-      const uploadData = await uploadRes.json();
-      const uploadedFilePath = uploadData[0];
-
-      // 2. Call prediction event
-      const eventRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          data: [{ path: uploadedFilePath, meta: { _type: 'gradio.FileData' } }]
-        }),
-      });
-
-      const { event_id } = await eventRes.json();
-
-      // 3. Fetch SSE result
-      const streamRes = await fetch(`${hfBaseUrl}/gradio_api/call/predict/${event_id}`, {
-        headers: { ...authHeaders }
-      });
-      const streamText = await streamRes.text();
-
-      // Parse SSE stream response natively
-      const lines = streamText.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data:')) {
-          const jsonPayload = line.substring(5).trim();
-          try {
-            const arrayData = JSON.parse(jsonPayload);
-            if (Array.isArray(arrayData) && arrayData[0]) {
-              const item = typeof arrayData[0] === 'string' ? JSON.parse(arrayData[0]) : arrayData[0];
-              if (item && item.disease) {
-                disease = item.disease;
-                confidence = item.confidence ?? confidence;
-                console.log("✓ Live AI Prediction Parsed Successfully:", disease, confidence);
-                break;
-              }
-            }
-          } catch (e) {
-            // Continuation line
-          }
-        }
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.disease) {
+        disease = data.disease;
+        confidence = data.confidence ?? confidence;
+        console.log("✓ Direct API Prediction Successful:", disease, confidence);
       }
+    } else {
+      console.warn("Direct predict endpoint returned status:", response.status);
     }
   } catch (error) {
     console.error("Backend AI server call error:", error);

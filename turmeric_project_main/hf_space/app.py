@@ -3,6 +3,9 @@ import sys
 import json
 import numpy as np
 import cv2
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import gradio as gr
 
 # Ensure project root is in python path
@@ -62,7 +65,52 @@ download_model_if_needed()
 
 from predict import predict_image
 
-def predict(image):
+def run_prediction_on_path(img_path):
+    res = predict_image(img_path, save_report=False)
+    frontend_mapping = {
+        "healthy":          "Healthy Leaf",
+        "leaf_spot":        "Leaf Spot",
+        "leaf_blotch":      "Leaf Blotch",
+        "dry_leaf":         "Dry Leaf",
+        "rhizome_healthy":  "Healthy Rhizome",
+        "rhizome_disease":  "Rhizome Rot",
+        "aphids":           "Aphids"
+    }
+    disease = frontend_mapping.get(res['predicted_label'], res['predicted_label'])
+    return {
+        "disease":    str(disease),
+        "confidence": float(res['confidence']),
+        "severity":   str(res['severity_label']),
+        "coverage":   float(res['disease_coverage'])
+    }
+
+# --- FastAPI App with full CORS support ---
+app = FastAPI(title="TurmeriCare API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.post("/predict")
+@app.post("/api/predict")
+async def api_predict(image: UploadFile = File(...)):
+    contents = await image.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    temp_path = os.path.join(ROOT, "temp_api_input.jpg")
+    try:
+        cv2.imwrite(temp_path, img)
+        result = run_prediction_on_path(temp_path)
+        return JSONResponse(result)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def gradio_predict(image):
     if image is None:
         return "Error: No image uploaded"
     temp_path = os.path.join(ROOT, "temp_gradio_input.jpg")
@@ -72,34 +120,18 @@ def predict(image):
         else:
             image.save(temp_path)
             
-        res = predict_image(temp_path, save_report=False)
-        frontend_mapping = {
-            "healthy":          "Healthy Leaf",
-            "leaf_spot":        "Leaf Spot",
-            "leaf_blotch":      "Leaf Blotch",
-            "dry_leaf":         "Dry Leaf",
-            "rhizome_healthy":  "Healthy Rhizome",
-            "rhizome_disease":  "Rhizome Rot",
-            "aphids":           "Aphids"
-        }
-        disease = frontend_mapping.get(res['predicted_label'], res['predicted_label'])
-        result = {
-            "disease":    str(disease),
-            "confidence": float(res['confidence']),
-            "severity":   str(res['severity_label']),
-            "coverage":   float(res['disease_coverage'])
-        }
+        result = run_prediction_on_path(temp_path)
         return json.dumps(result, indent=2)
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
 demo = gr.Interface(
-    fn=predict,
+    fn=gradio_predict,
     inputs=gr.Image(type="numpy", label="Upload Turmeric Leaf Image"),
     outputs=gr.Textbox(label="Prediction Result"),
     title="TurmeriCare ML Disease Classification API",
     description="Fast AI Disease Diagnosis API for Turmeric Plants"
 )
 
-demo.launch(cors_allowed_origins=["*"])
+app = gr.mount_gradio_app(app, demo, path="/")
